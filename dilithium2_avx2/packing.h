@@ -23,7 +23,7 @@ void polyz_pack_avx2(uint8_t r[POLYZ_PACKEDBYTES+7], const poly *restrict a);
 
 void polyt0_pack_avx2(uint8_t r[416], const poly *restrict a);
 
-void XURQ_AVX2_polyt1_unpack(poly *restrict r, const uint8_t a[POLYT1_PACKEDBYTES]);
+void polyt1_unpack_avx2(poly *restrict r, const uint8_t a[320]);
 
 void polyt1_pack_avx2(uint8_t r[320], const poly *restrict a);
 
@@ -32,13 +32,5 @@ void polyeta_unpack_avx2(poly *restrict r, const uint8_t a[POLYETA_PACKEDBYTES])
 void polyt0_unpack_avx2(poly *restrict r, const uint8_t a[POLYT0_PACKEDBYTES]);
 
 
-void XURQ_AVX2_polyz_unpack(poly *restrict r0,
-                            poly *restrict r1,
-                            poly *restrict r2,
-                            poly *restrict r3,
-                            const uint8_t *a0,
-                            const uint8_t *a1,
-                            const uint8_t *a2,
-                            const uint8_t *a3);
 
 #endif

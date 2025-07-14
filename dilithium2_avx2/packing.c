@@ -70,80 +70,65 @@ void unpack_sk(uint8_t rho[32],
 *              - const uint8_t *a: byte array with bit-packed polynomial
 **************************************************/
 void polyz_unpack_avx2(poly *restrict r, const uint8_t *a) {
-    unsigned int i;
-    __m256i f;
+    __m256i f0, f1, f2;
     const __m256i shufbidx = _mm256_set_epi8(-1, 9, 8, 7, -1, 7, 6, 5, -1, 5, 4, 3, -1, 3, 2, 1,
                                              -1, 8, 7, 6, -1, 6, 5, 4, -1, 4, 3, 2, -1, 2, 1, 0);
     const __m256i srlvdidx = _mm256_set_epi32(6, 4, 2, 0, 6, 4, 2, 0);
     const __m256i mask = _mm256_set1_epi32(0x3FFFF);
     const __m256i gamma1 = _mm256_set1_epi32(GAMMA1);
 
-    for (i = 0; i < N / 8; i++) {
-        f = _mm256_loadu_si256((__m256i *) &a[18 * i]);
-        f = _mm256_permute4x64_epi64(f, 0x94);
-        f = _mm256_shuffle_epi8(f, shufbidx);
-        f = _mm256_srlv_epi32(f, srlvdidx);
-        f = _mm256_and_si256(f, mask);
-        f = _mm256_sub_epi32(gamma1, f);
-        _mm256_store_si256(&r->vec[i], f);
-    }
-
-}
-
-void XURQ_AVX2_polyz_unpack(poly *restrict r0,
-                            poly *restrict r1,
-                            poly *restrict r2,
-                            poly *restrict r3,
-                            const uint8_t *a0,
-                            const uint8_t *a1,
-                            const uint8_t *a2,
-                            const uint8_t *a3) {
-    unsigned int i;
-    __m256i f0, f1, f2, f3;
-    const __m256i shufbidx = _mm256_set_epi8(-1, 9, 8, 7, -1, 7, 6, 5, -1, 5, 4, 3, -1, 3, 2, 1,
-                                             -1, 8, 7, 6, -1, 6, 5, 4, -1, 4, 3, 2, -1, 2, 1, 0);
-    const __m256i srlvdidx = _mm256_set_epi32(6, 4, 2, 0, 6, 4, 2, 0);
-    const __m256i mask = _mm256_set1_epi32(0x3FFFF);
-    const __m256i gamma1 = _mm256_set1_epi32(GAMMA1);
-
-    for (i = 0; i < N / 8; i++) {
-        f0 = _mm256_loadu_si256((__m256i *) &a0[18 * i]);
-        f1 = _mm256_loadu_si256((__m256i *) &a1[18 * i]);
-        f2 = _mm256_loadu_si256((__m256i *) &a2[18 * i]);
-        f3 = _mm256_loadu_si256((__m256i *) &a3[18 * i]);
+    for (int i = 0; i < 30; i += 3) {
+        f0 = _mm256_loadu_si256((__m256i *) &a[18 * i]);
+        f1 = _mm256_loadu_si256((__m256i *) &a[18 * i + 18]);
+        f2 = _mm256_loadu_si256((__m256i *) &a[18 * i + 36]);
 
         f0 = _mm256_permute4x64_epi64(f0, 0x94);
         f1 = _mm256_permute4x64_epi64(f1, 0x94);
         f2 = _mm256_permute4x64_epi64(f2, 0x94);
-        f3 = _mm256_permute4x64_epi64(f3, 0x94);
 
         f0 = _mm256_shuffle_epi8(f0, shufbidx);
         f1 = _mm256_shuffle_epi8(f1, shufbidx);
         f2 = _mm256_shuffle_epi8(f2, shufbidx);
-        f3 = _mm256_shuffle_epi8(f3, shufbidx);
 
         f0 = _mm256_srlv_epi32(f0, srlvdidx);
         f1 = _mm256_srlv_epi32(f1, srlvdidx);
         f2 = _mm256_srlv_epi32(f2, srlvdidx);
-        f3 = _mm256_srlv_epi32(f3, srlvdidx);
 
         f0 = _mm256_and_si256(f0, mask);
         f1 = _mm256_and_si256(f1, mask);
         f2 = _mm256_and_si256(f2, mask);
-        f3 = _mm256_and_si256(f3, mask);
 
         f0 = _mm256_sub_epi32(gamma1, f0);
         f1 = _mm256_sub_epi32(gamma1, f1);
         f2 = _mm256_sub_epi32(gamma1, f2);
-        f3 = _mm256_sub_epi32(gamma1, f3);
 
-        _mm256_store_si256(&r0->vec[i], f0);
-        _mm256_store_si256(&r1->vec[i], f1);
-        _mm256_store_si256(&r2->vec[i], f2);
-        _mm256_store_si256(&r3->vec[i], f3);
+        _mm256_store_si256(&r->vec[i], f0);
+        _mm256_store_si256(&r->vec[i + 1], f1);
+        _mm256_store_si256(&r->vec[i + 2], f2);
     }
 
+    f0 = _mm256_loadu_si256((__m256i *) &a[18 * 30]);
+    f1 = _mm256_loadu_si256((__m256i *) &a[18 * 31]);
+
+    f0 = _mm256_permute4x64_epi64(f0, 0x94);
+    f1 = _mm256_permute4x64_epi64(f1, 0x94);
+
+    f0 = _mm256_shuffle_epi8(f0, shufbidx);
+    f1 = _mm256_shuffle_epi8(f1, shufbidx);
+
+    f0 = _mm256_srlv_epi32(f0, srlvdidx);
+    f1 = _mm256_srlv_epi32(f1, srlvdidx);
+
+    f0 = _mm256_and_si256(f0, mask);
+    f1 = _mm256_and_si256(f1, mask);
+
+    f0 = _mm256_sub_epi32(gamma1, f0);
+    f1 = _mm256_sub_epi32(gamma1, f1);
+
+    _mm256_store_si256(&r->vec[30], f0);
+    _mm256_store_si256(&r->vec[31], f1);
 }
+
 
 
 /*************************************************
@@ -311,7 +296,7 @@ void polyt0_pack_avx2(uint8_t r[416], const poly *restrict a) {
 
 }
 
-void XURQ_AVX2_polyt1_unpack(poly *restrict r, const uint8_t a[POLYT1_PACKEDBYTES]) {
+void polyt1_unpack_avx2(poly *restrict r, const uint8_t a[320]) {
     __m256i b, b0;
     __m256i mask0 = _mm256_set_epi32(4, 4, 3, 2, 3, 2, 1, 0);
     __m256i mask1 = _mm256_set_epi8(11, 10, 10, 9, 9, 8, 8, 7, 6, 5, 5, 4, 4, 3, 3, 2,9, 8, 8, 7, 7, 6, 6, 5, 4, 3, 3, 2, 2, 1, 1, 0);
@@ -370,7 +355,6 @@ void polyt1_pack_avx2(uint8_t r[320], const poly *restrict a) {
         _mm_storeu_si128((__m128i_u *) (r + i * 10), g0);
         _mm_storeu_si128((__m128i_u *) (r + i * 10 + 5), g1);
     }
-
 }
 
 

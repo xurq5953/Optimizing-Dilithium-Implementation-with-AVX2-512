@@ -1,7 +1,7 @@
 #ifndef DILITHIUM2_AVX2_REJSAMPLE_H
 #define DILITHIUM2_AVX2_REJSAMPLE_H
 #include "params.h"
-#include "fips202.h"
+#include "keccak/fips202.h"
 #include <stdint.h>
 
 #define REJ_UNIFORM_NBLOCKS ((768+STREAM128_BLOCKBYTES-1)/STREAM128_BLOCKBYTES) // 5

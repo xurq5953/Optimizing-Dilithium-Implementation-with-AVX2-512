@@ -7,19 +7,19 @@
 
 typedef ALIGNED_INT32(N) poly;
 
-void poly_reduce(poly *a);
+void poly_reduce_avx2(poly *a);
 
-void poly_caddq(poly *a);
+void poly_caddq_avx2(poly *a);
 
-void poly_add(poly *c, const poly *a, const poly *b);
+void poly_add_avx2(poly *c, const poly *a, const poly *b);
 
-void poly_sub(poly *c, const poly *a, const poly *b);
+void poly_sub_avx2(poly *c, const poly *a, const poly *b);
 
 void poly_shiftl_avx2(poly *a);
 
 void poly_pointwise_montgomery(poly *c, const poly *a, const poly *b);
 
-void poly_power2round(poly *a1, poly *a0, const poly *a);
+void poly_power2round_avx2(poly *a1, poly *a0, const poly *a);
 
 void poly_decompose_avx2(poly *a1, poly *a0, const poly *a);
 

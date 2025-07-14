@@ -1,7 +1,7 @@
 #include "align.h"
 #include "consts.h"
-#include "fips202x4.h"
-#include "ntt.h"
+#include "keccak/fips202x4.h"
+#include "ntt/ntt.h"
 #include "params.h"
 #include "poly.h"
 #include "rejsample.h"
@@ -14,8 +14,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#define DBENCH_START()
-#define DBENCH_STOP(t)
+
 
 #define _mm256_blendv_epi32(a, b, mask) \
     _mm256_castps_si256(_mm256_blendv_ps(_mm256_castsi256_ps(a), \
@@ -23,7 +22,7 @@
                                          _mm256_castsi256_ps(mask)))
 
 /*************************************************
-* Name:        poly_reduce
+* Name:        poly_reduce_avx2
 *
 * Description: Inplace reduction of all coefficients of polynomial to
 *              representative in [-6283009,6283007]. Assumes input
@@ -31,7 +30,7 @@
 *
 * Arguments:   - poly *a: pointer to input/output polynomial
 **************************************************/
-void poly_reduce(poly *a) {
+void poly_reduce_avx2(poly *a) {
     unsigned int i;
     __m256i f, g;
     const __m256i q = _mm256_load_si256(&DILITHIUM2_AVX2_qdata.vec[_8XQ / 8]);
@@ -56,7 +55,7 @@ void poly_reduce(poly *a) {
 *
 * Arguments:   - poly *a: pointer to input/output polynomial
 **************************************************/
-void poly_caddq(poly *a) {
+void poly_caddq_avx2(poly *a) {
     unsigned int i;
     __m256i f, g;
     const __m256i q = _mm256_load_si256(&DILITHIUM2_AVX2_qdata.vec[_8XQ / 8]);
@@ -72,7 +71,7 @@ void poly_caddq(poly *a) {
 }
 
 /*************************************************
-* Name:        poly_add
+* Name:        poly_add_avx2
 *
 * Description: Add polynomials. No modular reduction is performed.
 *
@@ -80,7 +79,7 @@ void poly_caddq(poly *a) {
 *              - const poly *a: pointer to first summand
 *              - const poly *b: pointer to second summand
 **************************************************/
-void poly_add(poly *c, const poly *a, const poly *b) {
+void poly_add_avx2(poly *c, const poly *a, const poly *b) {
     unsigned int i;
     __m256i f, g;
 
@@ -94,7 +93,7 @@ void poly_add(poly *c, const poly *a, const poly *b) {
 }
 
 /*************************************************
-* Name:        poly_sub
+* Name:        poly_sub_avx2
 *
 * Description: Subtract polynomials. No modular reduction is
 *              performed.
@@ -104,7 +103,7 @@ void poly_add(poly *c, const poly *a, const poly *b) {
 *              - const poly *b: pointer to second input polynomial to be
 *                               subtraced from first input polynomial
 **************************************************/
-void poly_sub(poly *c, const poly *a, const poly *b) {
+void poly_sub_avx2(poly *c, const poly *a, const poly *b) {
     unsigned int i;
     __m256i f, g;
 
@@ -206,7 +205,7 @@ void poly_pointwise_montgomery(poly *c, const poly *a, const poly *b) {
 }
 
 /*************************************************
-* Name:        poly_power2round
+* Name:        poly_power2round_avx2
 *
 * Description: For all coefficients c of the input polynomial,
 *              compute c0, c1 such that c mod^+ Q = c1*2^D + c0
@@ -217,7 +216,7 @@ void poly_pointwise_montgomery(poly *c, const poly *a, const poly *b) {
 *              - poly *a0: pointer to output polynomial with coefficients c0
 *              - const poly *a: pointer to input polynomial
 **************************************************/
-void poly_power2round(poly *a1, poly *a0, const poly *a) {
+void poly_power2round_avx2(poly *a1, poly *a0, const poly *a) {
 
     power2round_avx2(a1->vec, a0->vec, a->vec);
 
@@ -281,7 +280,7 @@ void poly_use_hint_avx2(poly *b, const poly *a, const poly *h) {
 * Name:        poly_chknorm_avx2
 *
 * Description: Check infinity norm of polynomial against given bound.
-*              Assumes input polynomial to be reduced by poly_reduce().
+*              Assumes input polynomial to be reduced by poly_reduce_avx2().
 *
 * Arguments:   - const poly *a: pointer to polynomial
 *              - int32_t B: norm bound
@@ -712,7 +711,40 @@ void poly_challenge(poly *restrict c, const uint8_t seed[32]) {
 
 
 
+void ExpandMask(poly *a0,
+                poly *a1,
+                poly *a2,
+                poly *a3,
+                const uint8_t seed[64],
+                uint16_t nonce0,
+                uint16_t nonce1,
+                uint16_t nonce2,
+                uint16_t nonce3) {
+    ALIGNED_UINT8(712) buf[4];
+    keccakx4_state state;
 
+    state.s[0] = _mm256_set1_epi64x(seed[0]);
+    state.s[1] = _mm256_set1_epi64x(seed[1]);
+    state.s[2] = _mm256_set1_epi64x(seed[2]);
+    state.s[3] = _mm256_set1_epi64x(seed[3]);
+    state.s[4] = _mm256_set1_epi64x(seed[4]);
+    state.s[5] = _mm256_set1_epi64x(seed[5]);
+    state.s[6] = _mm256_set_epi64x((0x1f << 16) ^ nonce3, (0x1f << 16) ^ nonce2, (0x1f << 16) ^ nonce1,
+                                   (0x1f << 16) ^ nonce0);
+
+    for (int j = 7; j < 25; ++j)
+        state.s[j] = _mm256_setzero_si256();
+
+    state.s[16] = _mm256_set1_epi64x(0x1ULL << 63);
+
+    XURQ_AVX2_shake256x4_squeezeblocks(buf[0].coeffs, buf[1].coeffs, buf[2].coeffs, buf[3].coeffs,
+                                       5, &state);
+
+    polyz_unpack_avx2(a0, buf[0].coeffs);
+    polyz_unpack_avx2(a1, buf[1].coeffs);
+    polyz_unpack_avx2(a2, buf[2].coeffs);
+    polyz_unpack_avx2(a3, buf[3].coeffs);
+}
 
 
 

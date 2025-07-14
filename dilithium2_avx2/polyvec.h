@@ -31,6 +31,8 @@ void polyvec_matrix_pointwise_montgomery(polyveck *t, const polyvecl mat[4], con
 
 void ExpandA_shuffled(polyvecl mat[4], const uint8_t rho[32]);
 
+void ExpandA_row(polyvecl **row, polyvecl buf[2], const uint8_t rho[32], unsigned int i);
+
 void polyvecl_ntt_bo(polyvecl *v);
 
 void polyvecl_ntt_so(polyvecl *v);

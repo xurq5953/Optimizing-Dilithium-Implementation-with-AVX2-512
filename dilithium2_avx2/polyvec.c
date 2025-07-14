@@ -1,5 +1,5 @@
 #include "consts.h"
-#include "ntt.h"
+#include "ntt/ntt.h"
 #include "params.h"
 #include "poly.h"
 #include "polyvec.h"
@@ -47,7 +47,33 @@ void ExpandA_shuffled(polyvecl mat[4], const uint8_t rho[32]) {
     shuffle(mat[3].vec[3].coeffs);
 }
 
-
+void ExpandA_row(polyvecl **row, polyvecl buf[2], const uint8_t rho[32], unsigned int i) {
+    switch (i) {
+        case 0:
+            poly_uniform_4x_op13(&buf[0].vec[0], &buf[0].vec[1], &buf[0].vec[2], &buf[0].vec[3], rho, 0,
+                                 1, 2, 3);
+            *row = buf;
+            break;
+        case 1:
+            poly_uniform_4x_op13(&buf[1].vec[0], &buf[1].vec[1], &buf[1].vec[2], &buf[1].vec[3], rho,
+                                 256, 257,
+                                 258, 259);
+            *row = buf + 1;
+            break;
+        case 2:
+            poly_uniform_4x_op13(&buf[0].vec[0], &buf[0].vec[1], &buf[0].vec[2], &buf[0].vec[3], rho,
+                                 512, 513,
+                                 514, 515);
+            *row = buf;
+            break;
+        case 3:
+            poly_uniform_4x_op13(&buf[1].vec[0], &buf[1].vec[1], &buf[1].vec[2], &buf[1].vec[3], rho,
+                                 768, 769,
+                                 770, 771);
+            *row = buf + 1;
+            break;
+    }
+}
 
 void polyvec_matrix_pointwise_montgomery(polyveck *t, const polyvecl mat[4], const polyvecl *v) {
     unsigned int i;
@@ -119,7 +145,7 @@ void polyveck_caddq(polyveck *v) {
     unsigned int i;
 
     for (i = 0; i < K; ++i) {
-        poly_caddq(&v->vec[i]);
+        poly_caddq_avx2(&v->vec[i]);
     }
 }
 

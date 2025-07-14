@@ -1,5 +1,5 @@
 #include "align.h"
-#include "fips202.h"
+#include "keccak/fips202.h"
 #include "packing.h"
 #include "params.h"
 #include "poly.h"
@@ -11,47 +11,6 @@
 #include <stdio.h>
 
 
-static inline void
-ExpandA_row(polyvecl **row, polyvecl buf[2], const uint8_t rho[32], unsigned int i) {
-    switch (i) {
-        case 0:
-            poly_uniform_4x_op13(&buf[0].vec[0], &buf[0].vec[1], &buf[0].vec[2], &buf[0].vec[3], rho, 0,
-                                 1, 2, 3);
-            *row = buf;
-            break;
-        case 1:
-            poly_uniform_4x_op13(&buf[1].vec[0], &buf[1].vec[1], &buf[1].vec[2], &buf[1].vec[3], rho,
-                                 256, 257,
-                                 258, 259);
-            *row = buf + 1;
-            break;
-        case 2:
-            poly_uniform_4x_op13(&buf[0].vec[0], &buf[0].vec[1], &buf[0].vec[2], &buf[0].vec[3], rho,
-                                 512, 513,
-                                 514, 515);
-            *row = buf;
-            break;
-        case 3:
-            poly_uniform_4x_op13(&buf[1].vec[0], &buf[1].vec[1], &buf[1].vec[2], &buf[1].vec[3], rho,
-                                 768, 769,
-                                 770, 771);
-            *row = buf + 1;
-            break;
-    }
-}
-
-
-
-int dilithium2_sign_avx2(uint8_t *sm, size_t *smlen, const uint8_t *m, size_t mlen, const uint8_t *sk) {
-    size_t i;
-
-    for (i = 0; i < mlen; ++i) {
-        sm[DILITHIUM2_AVX2_CRYPTO_BYTES + mlen - 1 - i] = m[mlen - 1 - i];
-    }
-    dilithium2_signature_avx2(sm, smlen, sm + DILITHIUM2_AVX2_CRYPTO_BYTES, mlen, sk);
-    *smlen += mlen;
-    return 0;
-}
 
 
 int dilithium2_keypair_avx2(uint8_t *pk, uint8_t *sk) {
@@ -90,11 +49,11 @@ int dilithium2_keypair_avx2(uint8_t *pk, uint8_t *sk) {
         poly_intt_bo_avx2(&t1);
 
         /* Add error polynomial */
-        poly_add(&t1, &t1, &s2.vec[i]);
+        poly_add_avx2(&t1, &t1, &s2.vec[i]);
 
         /* Round t and pack t1, t0 */
-        poly_caddq(&t1);
-        poly_power2round(&t1, &t0, &t1);
+        poly_caddq_avx2(&t1);
+        poly_power2round_avx2(&t1, &t0, &t1);
         polyt1_pack_avx2(pk + SEEDBYTES + i * POLYT1_PACKEDBYTES, &t1);
         polyt0_pack_avx2(sk + 3 * SEEDBYTES + (L + K) * POLYETA_PACKEDBYTES + i * POLYT0_PACKEDBYTES,
                     &t0);
@@ -107,7 +66,7 @@ int dilithium2_keypair_avx2(uint8_t *pk, uint8_t *sk) {
 }
 
 
-int dilithium2_signature_avx2(uint8_t *sig, size_t *siglen, const uint8_t *m, size_t mlen, const uint8_t *sk) {
+int dilithium2_sign_avx2(uint8_t *sig, size_t *siglen, const uint8_t *m, size_t mlen, const uint8_t *sk) {
     unsigned int i, n, pos;
     uint8_t seedbuf[3 * SEEDBYTES + 2 * CRHBYTES];
     uint8_t *rho, *tr, *key, *mu, *rhoprime;
@@ -178,8 +137,8 @@ int dilithium2_signature_avx2(uint8_t *sig, size_t *siglen, const uint8_t *m, si
     for (i = 0; i < L; i++) {
         poly_pointwise_montgomery(&tmp, &c, &s1.vec[i]);
         poly_intt_so_avx2(&tmp);
-        poly_add(&z.vec[i], &z.vec[i], &tmp);
-        poly_reduce(&z.vec[i]);
+        poly_add_avx2(&z.vec[i], &z.vec[i], &tmp);
+        poly_reduce_avx2(&z.vec[i]);
         if (poly_chknorm_avx2(&z.vec[i], GAMMA1 - BETA)) {
             goto rej;
         }
@@ -194,8 +153,8 @@ int dilithium2_signature_avx2(uint8_t *sig, size_t *siglen, const uint8_t *m, si
          * do not reveal secret information */
         poly_pointwise_montgomery(&tmp, &c, &s2.vec[i]);
         poly_intt_so_avx2(&tmp);
-        poly_sub(&tmpv.w0.vec[i], &tmpv.w0.vec[i], &tmp);
-        poly_reduce(&tmpv.w0.vec[i]);
+        poly_sub_avx2(&tmpv.w0.vec[i], &tmpv.w0.vec[i], &tmp);
+        poly_reduce_avx2(&tmpv.w0.vec[i]);
         if (poly_chknorm_avx2(&tmpv.w0.vec[i], GAMMA2 - BETA)) {
             goto rej;
         }
@@ -203,21 +162,19 @@ int dilithium2_signature_avx2(uint8_t *sig, size_t *siglen, const uint8_t *m, si
         /* Compute hints */
         poly_pointwise_montgomery(&tmp, &c, &t0.vec[i]);
         poly_intt_so_avx2(&tmp);
-        poly_reduce(&tmp);
+        poly_reduce_avx2(&tmp);
         if (poly_chknorm_avx2(&tmp, GAMMA2)) {
             goto rej;
         }
 
-        poly_add(&tmpv.w0.vec[i], &tmpv.w0.vec[i], &tmp);
+        poly_add_avx2(&tmpv.w0.vec[i], &tmpv.w0.vec[i], &tmp);
         n = poly_make_hint_avx2(hintbuf, &tmpv.w0.vec[i], &w1.vec[i]);
         if (pos + n > OMEGA) {
             goto rej;
         }
 
         /* Store hints in signature */
-//        memcpy(&hint[pos], hintbuf, n);
-//        hint[OMEGA + i] = pos = pos + n;
-
+        /* hintbuf2 avoids the overflowing of poly_make_hint_avx2 */
         memcpy(&hintbuf2[pos], hintbuf, n);
         hintbuf2[OMEGA + i] = pos = pos + n;
     }
@@ -273,13 +230,13 @@ int dilithium2_verify_avx2(const uint8_t *sig, size_t siglen, const uint8_t *m, 
         /* Compute i-th row of Az - c2^Dt1 */
         polyvecl_pointwise_acc_montgomery(&w1, row, &z);
 
-        XURQ_AVX2_polyt1_unpack(&h, pk + SEEDBYTES + i * POLYT1_PACKEDBYTES);
+        polyt1_unpack_avx2(&h, pk + SEEDBYTES + i * POLYT1_PACKEDBYTES);
         poly_shiftl_avx2(&h);
         poly_ntt_bo_avx2(&h);
         poly_pointwise_montgomery(&h, &c, &h);
 
-        poly_sub(&w1, &w1, &h);
-        poly_reduce(&w1);
+        poly_sub_avx2(&w1, &w1, &h);
+        poly_reduce_avx2(&w1);
         poly_intt_bo_avx2(&w1);
 
         /* Get hint polynomial and reconstruct w1 */
@@ -297,7 +254,7 @@ int dilithium2_verify_avx2(const uint8_t *sig, size_t siglen, const uint8_t *m, 
 
         pos = hint[OMEGA + i];
 
-        poly_caddq(&w1);
+        poly_caddq_avx2(&w1);
         poly_use_hint_avx2(&w1, &w1, &h);
         polyw1_pack_avx2(buf.coeffs + i * POLYW1_PACKEDBYTES, &w1);
     }
@@ -321,47 +278,4 @@ int dilithium2_verify_avx2(const uint8_t *sig, size_t siglen, const uint8_t *m, 
     }
 
     return 0;
-}
-
-
-/*************************************************
-* Name:        dilithium2_sign_open_avx2
-*
-* Description: Verify signed message.
-*
-* Arguments:   - uint8_t *m: pointer to output message (allocated
-*                            array with smlen bytes), can be equal to sm
-*              - size_t *mlen: pointer to output length of message
-*              - const uint8_t *sm: pointer to signed message
-*              - size_t smlen: length of signed message
-*              - const uint8_t *pk: pointer to bit-packed public key
-*
-* Returns 0 if signed message could be verified correctly and -1 otherwise
-**************************************************/
-int dilithium2_sign_open_avx2(uint8_t *m, size_t *mlen, const uint8_t *sm, size_t smlen, const uint8_t *pk) {
-    size_t i;
-
-    if (smlen < DILITHIUM2_AVX2_CRYPTO_BYTES) {
-        goto badsig;
-    }
-
-    *mlen = smlen - DILITHIUM2_AVX2_CRYPTO_BYTES;
-    if (dilithium2_verify_avx2(sm, DILITHIUM2_AVX2_CRYPTO_BYTES, sm + DILITHIUM2_AVX2_CRYPTO_BYTES, *mlen, pk)) {
-        goto badsig;
-    } else {
-        /* All good, copy msg, return 0 */
-        for (i = 0; i < *mlen; ++i) {
-            m[i] = sm[DILITHIUM2_AVX2_CRYPTO_BYTES + i];
-        }
-        return 0;
-    }
-
-    badsig:
-    /* Signature verification failed */
-    *mlen = -1;
-    for (i = 0; i < smlen; ++i) {
-        m[i] = 0;
-    }
-
-    return -1;
 }
