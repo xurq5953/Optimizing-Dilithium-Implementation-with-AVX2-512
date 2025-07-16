@@ -1,6 +1,6 @@
 # Optimizing-Dilithium-Implementation-with-AVX2-512
 The source code of the paper Optimizing Dilithium Implementation with AVX2/-512. 
-The full code will be released as soon as we're done organizing it.
+
 
 Our implementation is based on the reference Dilithium implementation (https://csrc.nist.gov/Projects/post-quantum-cryptography/selected-algorithms-2022) and the PQClean project (https://github.com/PQClean/PQClean).
 
